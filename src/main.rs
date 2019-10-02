@@ -2,18 +2,39 @@ fn main() {
     println!("Hello, world!");
 }
 
-fn code_to_bin(code: &str) -> String {
-    if Some('@') == code.chars().nth(0) {
-        let value = code[1..].parse::<i16>().unwrap();
-        return format!("{:0>16b}", value);
+#[derive(PartialEq)]
+#[derive(Debug)]
+enum Command {
+    AType { value: i16 },
+    CType { s: String }
+}
+
+fn build_command(line: &str) -> Command {
+    if Some('@') == line.chars().nth(0) {
+        let value = line[1..].parse::<i16>().unwrap();
+        return Command::AType { value: value }
     } else {
-        return code.to_string();
+        return Command::CType { s: line.to_string() }
+    }
+}
+
+fn code_to_bin(code: &str) -> String {
+    let command = build_command(code);
+    match command {
+        Command::AType { value } => format!("{:0>16b}", value),
+        Command::CType { s } => s,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_build_command_to_a_type() {
+        assert_eq!(Command::AType { value: 2 }, build_command("@2"));
+        assert_eq!(Command::AType { value: 133 }, build_command("@133"));
+    }
 
     #[test]
     fn test_code_to_bin() {
