@@ -1,8 +1,8 @@
-use std::fs;
 use std::error::Error;
+use std::fs;
 
 pub struct Config {
-    filename: String
+    filename: String,
 }
 
 impl Config {
@@ -17,16 +17,37 @@ impl Config {
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(config.filename)?;
+    let lines: Vec<&str> = contents.split_terminator("\n").collect();
+    let filtered_lines: Vec<&str> = remove_all_white_space_and_comments(lines);
 
-    println!("With text:\n{}", contents);
+    println!("With filtered:\n{:?}", filtered_lines);
 
     Ok(())
 }
 
+fn remove_all_white_space_and_comments(lines: Vec<&str>) -> Vec<&str> {
+    return lines
+        .into_iter()
+        .filter(|s| !s.trim().is_empty() && !s.starts_with("//"))
+        .collect();
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_remove_all_white_space_and_comments() {
+        let comments = vec![
+            "// this",
+            "\n\n",
+            "// is",
+            "// a comment.",
+            "\n",
+            "@2",
+            "D=M",
+        ];
+        let actual = remove_all_white_space_and_comments(comments);
+        assert_eq!(actual, ["@2", "D=M"]);
     }
 }
