@@ -28,10 +28,15 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 }
 
 fn remove_all_white_space_and_comments(lines: Vec<&str>) -> Vec<&str> {
-    return lines
-        .into_iter()
-        .filter(|s| !s.trim().is_empty() && !s.starts_with("//"))
-        .collect();
+    let mut result: Vec<&str> = Vec::new();
+    for line in lines {
+        let subs: Vec<&str> = line.split("//").collect();
+        let trimmed = subs[0].trim();
+        if !trimmed.is_empty() {
+            result.push(trimmed);
+        }
+    }
+    return result
 }
 
 #[derive(PartialEq, Debug)]
@@ -97,9 +102,10 @@ mod tests {
             "\n",
             "@2",
             "D=M",
+            "    M=D+M  // i am here",
         ];
         let actual = remove_all_white_space_and_comments(comments);
-        assert_eq!(actual, ["@2", "D=M"]);
+        assert_eq!(actual, ["@2", "D=M", "M=D+M"]);
     }
 
     #[test]
