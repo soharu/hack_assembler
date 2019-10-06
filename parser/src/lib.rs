@@ -22,7 +22,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let lines: Vec<&str> = contents.split_terminator("\n").collect();
     let filtered_lines: Vec<&str> = remove_all_white_space_and_comments(lines);
 
-    println!("With filtered:\n{:?}", filtered_lines);
+    for line in filtered_lines {
+        let bin = code_to_bin(line);
+        println!("{}", bin);
+    }
 
     Ok(())
 }
