@@ -3,4 +3,5 @@ members = [
   "assembler",
   "parser",
   "code",
+  "symbol_table",
 ]
