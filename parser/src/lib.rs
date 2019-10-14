@@ -175,13 +175,17 @@ mod tests {
 
     #[test]
     fn test_code_to_bin() {
-        let mut command = Command::AType { value: 2 };
+        let mut command = build_command("@2");
         assert_eq!("0000000000000010", code_to_bin(&command));
-        command = Command::AType { value: 133 };
+        command = build_command("@133");
         assert_eq!("0000000010000101", code_to_bin(&command));
-        // assert_eq!("1110110000010000", code_to_bin("D=A"));
-        // assert_eq!("1110000010010000", code_to_bin("D=D+A"));
-        // assert_eq!("1110001100001000", code_to_bin("M=D"));
-        // assert_eq!("1110001100000001", code_to_bin("D;JGT"));
+        command = build_command("D=A");
+        assert_eq!("1110110000010000", code_to_bin(&command));
+        command = build_command("D=D+A");
+        assert_eq!("1110000010010000", code_to_bin(&command));
+        command = build_command("M=D");
+        assert_eq!("1110001100001000", code_to_bin(&command));
+        command = build_command("D;JGT");
+        assert_eq!("1110001100000001", code_to_bin(&command));
     }
 }
