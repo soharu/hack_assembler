@@ -20,10 +20,11 @@ impl Config {
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(config.filename)?;
     let lines: Vec<&str> = contents.split_terminator("\n").collect();
-    let filtered_lines: Vec<&str> = remove_all_white_space_and_comments(lines);
+    let mut parser = Parser::new(lines);
 
-    for line in filtered_lines {
-        let bin = code_to_bin(line);
+    while parser.has_more_commands() {
+        let command = parser.advance();
+        let bin = code_to_bin(command);
         println!("{}", bin);
     }
 
@@ -39,7 +40,7 @@ fn remove_all_white_space_and_comments(lines: Vec<&str>) -> Vec<&str> {
             result.push(trimmed);
         }
     }
-    return result
+    return result;
 }
 
 #[derive(PartialEq, Debug)]
@@ -83,11 +84,38 @@ fn c_command_to_bin(dest: String, comp: String, jump: String) -> String {
     return result;
 }
 
-fn code_to_bin(code: &str) -> String {
-    let command = build_command(code);
+fn code_to_bin(command: &Command) -> String {
     match command {
         Command::AType { value } => format!("{:0>16b}", value),
-        Command::CType { dest, comp, jump } => c_command_to_bin(dest, comp, jump),
+        Command::CType { dest, comp, jump } => {
+            c_command_to_bin(dest.to_string(), comp.to_string(), jump.to_string())
+        }
+    }
+}
+
+struct Parser {
+    commands: Vec<Command>,
+    cursor: usize,
+}
+
+impl Parser {
+    pub fn new(lines: Vec<&str>) -> Parser {
+        let filtered_lines: Vec<&str> = remove_all_white_space_and_comments(lines);
+        let commands: Vec<Command> = filtered_lines.iter().map(|x| build_command(x)).collect();
+        return Parser {
+            commands: commands,
+            cursor: 0,
+        };
+    }
+
+    pub fn has_more_commands(&self) -> bool {
+        return self.cursor < self.commands.len();
+    }
+
+    pub fn advance(&mut self) -> &Command {
+        let current = &self.commands[self.cursor];
+        self.cursor += 1;
+        return current;
     }
 }
 
@@ -147,11 +175,13 @@ mod tests {
 
     #[test]
     fn test_code_to_bin() {
-        assert_eq!("0000000000000010", code_to_bin("@2"));
-        assert_eq!("0000000010000101", code_to_bin("@133"));
-        assert_eq!("1110110000010000", code_to_bin("D=A"));
-        assert_eq!("1110000010010000", code_to_bin("D=D+A"));
-        assert_eq!("1110001100001000", code_to_bin("M=D"));
-        assert_eq!("1110001100000001", code_to_bin("D;JGT"));
+        let mut command = Command::AType { value: 2 };
+        assert_eq!("0000000000000010", code_to_bin(&command));
+        command = Command::AType { value: 133 };
+        assert_eq!("0000000010000101", code_to_bin(&command));
+        // assert_eq!("1110110000010000", code_to_bin("D=A"));
+        // assert_eq!("1110000010010000", code_to_bin("D=D+A"));
+        // assert_eq!("1110001100001000", code_to_bin("M=D"));
+        // assert_eq!("1110001100000001", code_to_bin("D;JGT"));
     }
 }
