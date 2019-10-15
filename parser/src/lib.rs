@@ -20,11 +20,11 @@ impl Config {
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(config.filename)?;
     let lines: Vec<&str> = contents.split_terminator("\n").collect();
-    let mut parser = Parser::new(lines);
 
-    while parser.has_more_commands() {
-        let command = parser.advance();
-        let bin = code_to_bin(command);
+    let mut parser = Parser::new(lines);
+    parser.run();
+
+    for bin in &parser.binaries {
         println!("{}", bin);
     }
 
@@ -96,6 +96,7 @@ fn code_to_bin(command: &Command) -> String {
 struct Parser {
     commands: Vec<Command>,
     cursor: usize,
+    binaries: Vec<String>,
 }
 
 impl Parser {
@@ -105,6 +106,7 @@ impl Parser {
         return Parser {
             commands: commands,
             cursor: 0,
+            binaries: Vec::new(),
         };
     }
 
@@ -112,10 +114,21 @@ impl Parser {
         return self.cursor < self.commands.len();
     }
 
-    pub fn advance(&mut self) -> &Command {
-        let current = &self.commands[self.cursor];
+    pub fn current_command(&self) -> &Command {
+        return &self.commands[self.cursor];
+    }
+
+    pub fn advance(&mut self) {
         self.cursor += 1;
-        return current;
+    }
+
+    pub fn run(&mut self) {
+        while self.has_more_commands() {
+            let command = self.current_command();
+            let bin = code_to_bin(command);
+            self.binaries.push(bin);
+            self.advance();
+        }
     }
 }
 
@@ -187,5 +200,36 @@ mod tests {
         assert_eq!("1110001100001000", code_to_bin(&command));
         command = build_command("D;JGT");
         assert_eq!("1110001100000001", code_to_bin(&command));
+    }
+
+    #[test]
+    fn test_parser() {
+        let lines = vec![
+            "// this",
+            "\n\n",
+            "// is",
+            "// a comment.",
+            "\n",
+            "@2",
+            "D=A",
+            "@3",
+            "D=D+A",
+            "@0",
+            "M=D",
+        ];
+        let expected = vec![
+            "0000000000000010",
+            "1110110000010000",
+            "0000000000000011",
+            "1110000010010000",
+            "0000000000000000",
+            "1110001100001000",
+        ];
+
+        let mut parser = Parser::new(lines);
+        parser.run();
+
+        assert_eq!(expected.len(), parser.binaries.len());
+        assert_eq!(expected, parser.binaries);
     }
 }
