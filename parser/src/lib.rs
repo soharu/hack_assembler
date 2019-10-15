@@ -67,11 +67,11 @@ fn build_command(line: &str) -> Command {
     return Command::CType {
         dest: captures
             .name("dest")
-            .map_or("".to_string(), |m| m.as_str().to_string()),
-        comp: captures["comp"].to_string(),
+            .map_or("".into(), |m| m.as_str().into()),
+        comp: captures["comp"].into(),
         jump: captures
             .name("jump")
-            .map_or("".to_string(), |m| m.as_str().to_string()),
+            .map_or("".into(), |m| m.as_str().into()),
     };
 }
 
@@ -88,7 +88,7 @@ fn code_to_bin(command: &Command) -> String {
     match command {
         Command::AType { value } => format!("{:0>16b}", value),
         Command::CType { dest, comp, jump } => {
-            c_command_to_bin(dest.to_string(), comp.to_string(), jump.to_string())
+            c_command_to_bin(dest.into(), comp.into(), jump.into())
         }
     }
 }
@@ -149,25 +149,25 @@ mod tests {
     fn test_build_command_to_c_type() {
         assert_eq!(
             Command::CType {
-                dest: "D".to_string(),
-                comp: "A".to_string(),
-                jump: "".to_string(),
+                dest: "D".into(),
+                comp: "A".into(),
+                jump: "".into(),
             },
             build_command("D=A")
         );
         assert_eq!(
             Command::CType {
-                dest: "AM".to_string(),
-                comp: "M-1".to_string(),
-                jump: "".to_string(),
+                dest: "AM".into(),
+                comp: "M-1".into(),
+                jump: "".into(),
             },
             build_command("AM=M-1")
         );
         assert_eq!(
             Command::CType {
-                dest: "".to_string(),
-                comp: "0".to_string(),
-                jump: "JEQ".to_string(),
+                dest: "".into(),
+                comp: "0".into(),
+                jump: "JEQ".into(),
             },
             build_command("0;JEQ")
         );
