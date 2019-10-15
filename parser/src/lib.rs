@@ -75,20 +75,11 @@ fn build_command(line: &str) -> Command {
     };
 }
 
-fn c_command_to_bin(dest: String, comp: String, jump: String) -> String {
-    let mut result = String::new();
-    result.push_str("111");
-    result.push_str(code::comp_to_bin(&comp));
-    result.push_str(code::dest_to_bin(&dest));
-    result.push_str(code::jump_to_bin(&jump));
-    return result;
-}
-
 fn code_to_bin(command: &Command) -> String {
     match command {
         Command::AType { value } => format!("{:0>16b}", value),
         Command::CType { dest, comp, jump } => {
-            c_command_to_bin(dest.into(), comp.into(), jump.into())
+            code::to_bin(dest, comp, jump)
         }
     }
 }

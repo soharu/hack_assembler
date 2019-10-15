@@ -1,6 +1,15 @@
 // Translate Hack assembly mnemonics into binary code
 
-pub fn dest_to_bin(dest: &str) -> &str {
+pub fn to_bin(dest: &str, comp: &str, jump: &str) -> String {
+    let mut result = String::new();
+    result.push_str("111");
+    result.push_str(comp_to_bin(comp));
+    result.push_str(dest_to_bin(dest));
+    result.push_str(jump_to_bin(jump));
+    return result;
+}
+
+fn dest_to_bin(dest: &str) -> &str {
     match dest {
         ""    => "000",
         "M"   => "001",
@@ -14,7 +23,7 @@ pub fn dest_to_bin(dest: &str) -> &str {
     }
 }
 
-pub fn comp_to_bin(comp: &str) -> &str {
+fn comp_to_bin(comp: &str) -> &str {
     match comp {
         "0"   => "0101010",
         "1"   => "0111111",
@@ -48,7 +57,7 @@ pub fn comp_to_bin(comp: &str) -> &str {
     }
 }
 
-pub fn jump_to_bin(jump: &str) -> &str {
+fn jump_to_bin(jump: &str) -> &str {
     match jump {
         ""    => "000",
         "JGT" => "001",
@@ -59,5 +68,18 @@ pub fn jump_to_bin(jump: &str) -> &str {
         "JLE" => "110",
         "JMP" => "111",
         _ => "",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_bin() {
+        assert_eq!("1110110000010000", to_bin("D", "A", ""));
+        assert_eq!("1110000010010000", to_bin("D", "D+A", ""));
+        assert_eq!("1110001100001000", to_bin("M", "D", ""));
+        assert_eq!("1110001100000001", to_bin("", "D", "JGT"))
     }
 }
