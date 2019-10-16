@@ -1,6 +1,13 @@
 use code;
 use regex::Regex;
 
+pub fn binary_code_from(lines: Vec<&str>) -> Vec<String> {
+    let filtered_lines: Vec<&str> = remove_all_white_space_and_comments(lines);
+    let parser = Parser::new(filtered_lines);
+    let result = parser.run();
+    return result;
+}
+
 fn remove_all_white_space_and_comments(lines: Vec<&str>) -> Vec<&str> {
     let mut result: Vec<&str> = Vec::new();
     for line in lines {
@@ -52,42 +59,18 @@ fn code_to_bin(command: &Command) -> String {
     }
 }
 
-pub struct Parser {
+struct Parser {
     commands: Vec<Command>,
-    cursor: usize,
-    pub binaries: Vec<String>,
 }
 
 impl Parser {
-    pub fn new(lines: Vec<&str>) -> Parser {
-        let filtered_lines: Vec<&str> = remove_all_white_space_and_comments(lines);
-        let commands: Vec<Command> = filtered_lines.iter().map(|x| build_command(x)).collect();
-        return Parser {
-            commands: commands,
-            cursor: 0,
-            binaries: Vec::new(),
-        };
+    fn new(lines: Vec<&str>) -> Parser {
+        let commands: Vec<Command> = lines.iter().map(|x| build_command(x)).collect();
+        return Parser { commands: commands };
     }
 
-    pub fn run(&mut self) {
-        while self.has_more_commands() {
-            let command = self.current_command();
-            let bin = code_to_bin(command);
-            self.binaries.push(bin);
-            self.advance();
-        }
-    }
-
-    fn has_more_commands(&self) -> bool {
-        return self.cursor < self.commands.len();
-    }
-
-    fn current_command(&self) -> &Command {
-        return &self.commands[self.cursor];
-    }
-
-    fn advance(&mut self) {
-        self.cursor += 1;
+    fn run(self) -> Vec<String> {
+        return self.commands.iter().map(|c| code_to_bin(c)).collect();
     }
 }
 
@@ -162,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parser() {
+    fn test_binary_code_from_assembly_code() {
         let lines = vec![
             "// this",
             "\n\n",
@@ -185,10 +168,7 @@ mod tests {
             "1110001100001000",
         ];
 
-        let mut parser = Parser::new(lines);
-        parser.run();
-
-        assert_eq!(expected.len(), parser.binaries.len());
-        assert_eq!(expected, parser.binaries);
+        let actual = binary_code_from(lines);
+        assert_eq!(expected, actual);
     }
 }

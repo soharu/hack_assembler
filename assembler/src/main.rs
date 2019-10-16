@@ -14,10 +14,8 @@ fn main() {
     match file_to_lines(config.filename.as_str()) {
         Ok(lines) => {
             let lines_as_ref = lines.iter().map(AsRef::as_ref).collect();
-            let mut parser = parser::Parser::new(lines_as_ref);
-            parser.run();
-
-            for bin in &parser.binaries {
+            let result = parser::binary_code_from(lines_as_ref);
+            for bin in result {
                 println!("{}", bin);
             }
         }
