@@ -101,18 +101,6 @@ impl Parser {
         };
     }
 
-    pub fn has_more_commands(&self) -> bool {
-        return self.cursor < self.commands.len();
-    }
-
-    pub fn current_command(&self) -> &Command {
-        return &self.commands[self.cursor];
-    }
-
-    pub fn advance(&mut self) {
-        self.cursor += 1;
-    }
-
     pub fn run(&mut self) {
         while self.has_more_commands() {
             let command = self.current_command();
@@ -120,6 +108,18 @@ impl Parser {
             self.binaries.push(bin);
             self.advance();
         }
+    }
+
+    fn has_more_commands(&self) -> bool {
+        return self.cursor < self.commands.len();
+    }
+
+    fn current_command(&self) -> &Command {
+        return &self.commands[self.cursor];
+    }
+
+    fn advance(&mut self) {
+        self.cursor += 1;
     }
 }
 
