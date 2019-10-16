@@ -1,35 +1,5 @@
 use code;
 use regex::Regex;
-use std::error::Error;
-use std::fs;
-
-pub struct Config {
-    filename: String,
-}
-
-impl Config {
-    pub fn new(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 2 {
-            return Err("not enough arguments");
-        }
-        let filename = args[1].clone();
-        Ok(Config { filename })
-    }
-}
-
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(config.filename)?;
-    let lines: Vec<&str> = contents.split_terminator("\n").collect();
-
-    let mut parser = Parser::new(lines);
-    parser.run();
-
-    for bin in &parser.binaries {
-        println!("{}", bin);
-    }
-
-    Ok(())
-}
 
 fn remove_all_white_space_and_comments(lines: Vec<&str>) -> Vec<&str> {
     let mut result: Vec<&str> = Vec::new();
@@ -78,16 +48,14 @@ fn build_command(line: &str) -> Command {
 fn code_to_bin(command: &Command) -> String {
     match command {
         Command::AType { value } => format!("{:0>16b}", value),
-        Command::CType { dest, comp, jump } => {
-            code::to_bin(dest, comp, jump)
-        }
+        Command::CType { dest, comp, jump } => code::to_bin(dest, comp, jump),
     }
 }
 
-struct Parser {
+pub struct Parser {
     commands: Vec<Command>,
     cursor: usize,
-    binaries: Vec<String>,
+    pub binaries: Vec<String>,
 }
 
 impl Parser {
