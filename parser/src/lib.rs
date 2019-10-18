@@ -1,11 +1,14 @@
 use code;
 use regex::Regex;
+use symbol_table;
 
 pub fn binary_code_from(lines: Vec<&str>) -> Vec<String> {
     let filtered_lines: Vec<&str> = remove_all_white_space_and_comments(lines);
+    let symbol_table = build_symbol_table(&filtered_lines);
     let result: Vec<String> = filtered_lines
         .iter()
-        .map(|line| build_instruction(line).to_bin())
+        .filter(|line| Some('(') != line.chars().nth(0))
+        .map(|line| build_instruction(line, &symbol_table).to_bin())
         .collect();
     return result;
 }
@@ -22,12 +25,73 @@ fn remove_all_white_space_and_comments(lines: Vec<&str>) -> Vec<&str> {
     return result;
 }
 
-fn build_instruction(line: &str) -> Box<dyn Instruction + 'static> {
-    if Some('@') == line.chars().nth(0) {
-        let value = line[1..].parse::<i16>().unwrap();
-        return Box::new(AddressingValueInstruction { value: value });
+fn build_symbol_table(lines: &Vec<&str>) -> symbol_table::SymbolTable {
+    let mut symbol_table = symbol_table::SymbolTable::new();
+
+    // 1st Pass
+    let re = Regex::new(r"\((?P<label>.*)\)").unwrap();
+    let mut address = 0;
+    for line in lines.iter() {
+        match re.captures(line) {
+            Some(captures) => {
+                let label = captures.name("label").map_or("", |m| m.as_str());
+                if label.len() > 0 && symbol_table.contains(&label) == false {
+                    symbol_table.add_entry(&label, address);
+                }
+            }
+            None => {
+                address += 1;
+            }
+        }
     }
-    return Box::new(ComputeInstruction::new(line));
+
+    // 2nd Pass
+    let mut address = 16;
+    for line in lines.iter() {
+        match extract_symbol_from(line) {
+            Some(symbol) => {
+                if symbol_table.contains(&symbol) == false {
+                    symbol_table.add_entry(&symbol, address);
+                    address += 1;
+                }
+            }
+            None => {}
+        }
+    }
+
+    return symbol_table;
+}
+
+fn extract_symbol_from(line: &str) -> Option<String> {
+    if Some('@') != line.chars().nth(0) {
+        return None;
+    }
+
+    let value_or_symbol = &line[1..];
+    match value_or_symbol.parse::<i16>() {
+        Ok(_) => None,
+        Err(_) => {
+            return Some(value_or_symbol.into());
+        }
+    }
+}
+
+fn build_instruction(
+    line: &str,
+    symbol_table: &symbol_table::SymbolTable,
+) -> Box<dyn Instruction + 'static> {
+    if Some('@') != line.chars().nth(0) {
+        return Box::new(ComputeInstruction::new(line));
+    }
+
+    let value_or_symbol = &line[1..];
+    match value_or_symbol.parse::<i16>() {
+        Ok(value) => return Box::new(AddressingValueInstruction { value: value }),
+        Err(_) => {
+            let value = symbol_table.get_address(&value_or_symbol).unwrap();
+            return Box::new(AddressingValueInstruction { value: value });
+        }
+    };
 }
 
 trait Instruction {
@@ -128,13 +192,56 @@ mod tests {
     }
 
     #[test]
+    fn test_build_symbol_table() {
+        let lines = vec!["@2", "@i", "@sum", "@R1"];
+        let symbol_table = build_symbol_table(&lines);
+        assert_eq!(Some(16), symbol_table.get_address("i"));
+        assert_eq!(Some(17), symbol_table.get_address("sum"));
+        assert_eq!(Some(1), symbol_table.get_address("R1"));
+    }
+
+    #[test]
+    fn test_extract_symbol_from_a_single_line() {
+        assert_eq!(None, extract_symbol_from("@2"));
+        assert_eq!(Some("SP".into()), extract_symbol_from("@SP"));
+        assert_eq!(Some("i".into()), extract_symbol_from("@i"));
+    }
+
+    #[test]
     fn test_build_instruction() {
-        assert_eq!("0000000000000010", build_instruction("@2").to_bin());
-        assert_eq!("0000000010000101", build_instruction("@133").to_bin());
-        assert_eq!("1110110000010000", build_instruction("D=A").to_bin());
-        assert_eq!("1110000010010000", build_instruction("D=D+A").to_bin());
-        assert_eq!("1110001100001000", build_instruction("M=D").to_bin());
-        assert_eq!("1110001100000001", build_instruction("D;JGT").to_bin());
+        let symbol_table = symbol_table::SymbolTable::new();
+        assert_eq!(
+            "0000000000000010",
+            build_instruction("@2", &symbol_table).to_bin()
+        );
+        assert_eq!(
+            "0000000010000101",
+            build_instruction("@133", &symbol_table).to_bin()
+        );
+        assert_eq!(
+            "1110110000010000",
+            build_instruction("D=A", &symbol_table).to_bin()
+        );
+        assert_eq!(
+            "1110000010010000",
+            build_instruction("D=D+A", &symbol_table).to_bin()
+        );
+        assert_eq!(
+            "1110001100001000",
+            build_instruction("M=D", &symbol_table).to_bin()
+        );
+        assert_eq!(
+            "1110001100000001",
+            build_instruction("D;JGT", &symbol_table).to_bin()
+        );
+        assert_eq!(
+            "0000000000000000",
+            build_instruction("@SP", &symbol_table).to_bin()
+        );
+        assert_eq!(
+            "0000000000001111",
+            build_instruction("@R15", &symbol_table).to_bin()
+        );
     }
 
     #[test]
@@ -159,6 +266,35 @@ mod tests {
             "1110000010010000",
             "0000000000000000",
             "1110001100001000",
+        ];
+
+        let actual = binary_code_from(lines);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_binary_code_from_assembly_code_with_symbol() {
+        let lines = vec![
+            "// this",
+            "\n\n",
+            "// is",
+            "// a comment.",
+            "\n",
+            "@0",
+            "D=M",
+            "@LOOP",
+            "D;JLE",
+            "(LOOP)",
+            "M=D",
+            "@counter",
+        ];
+        let expected = vec![
+            "0000000000000000", // @0
+            "1111110000010000", // D=M
+            "0000000000000100", // @LOOP
+            "1110001100000110", // D;JLE
+            "1110001100001000", // M=D
+            "0000000000010000", // @counter
         ];
 
         let actual = binary_code_from(lines);
