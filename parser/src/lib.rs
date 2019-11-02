@@ -4,11 +4,16 @@ use symbol_table;
 
 pub fn binary_code_from(lines: Vec<&str>) -> Vec<String> {
     let filtered_lines: Vec<&str> = remove_all_white_space_and_comments(lines);
-    let symbol_table = build_symbol_table(&filtered_lines);
-    let result: Vec<String> = filtered_lines
+    let instructions: Vec<Box<dyn Instruction + 'static>> = filtered_lines
         .iter()
-        .filter(|line| Some('(') != line.chars().nth(0))
-        .map(|line| build_instruction(line, &symbol_table).to_bin())
+        .map(|line| build_instruction(line))
+        .collect();
+    let symbol_table = build_symbol_table(&instructions);
+    let result: Vec<String> = instructions
+        .iter()
+        .map(|instruction| instruction.to_bin(&symbol_table))
+        .filter(|s| s.is_some())
+        .map(|s| s.unwrap())
         .collect();
     return result;
 }
@@ -25,77 +30,70 @@ fn remove_all_white_space_and_comments(lines: Vec<&str>) -> Vec<&str> {
     return result;
 }
 
-fn build_symbol_table(lines: &Vec<&str>) -> symbol_table::SymbolTable {
+fn build_instruction(line: &str) -> Box<dyn Instruction + 'static> {
+    match AddressingValueInstruction::new(line) {
+        Some(instruction) => return Box::new(instruction),
+        None => {}
+    }
+
+    match AddressingSymbolInstruction::new(line) {
+        Some(instruction) => return Box::new(instruction),
+        None => {}
+    }
+
+    match LabelInstruction::new(line) {
+        Some(instruction) => return Box::new(instruction),
+        None => {}
+    }
+
+    return Box::new(ComputeInstruction::new(line));
+}
+
+fn build_symbol_table(
+    instructions: &Vec<Box<dyn Instruction + 'static>>,
+) -> symbol_table::SymbolTable {
     let mut symbol_table = symbol_table::SymbolTable::new();
 
     // 1st Pass
-    let re = Regex::new(r"\((?P<label>.*)\)").unwrap();
-    let mut address = 0;
-    for line in lines.iter() {
-        match re.captures(line) {
-            Some(captures) => {
-                let label = captures.name("label").map_or("", |m| m.as_str());
-                if label.len() > 0 && symbol_table.contains(&label) == false {
-                    symbol_table.add_entry(&label, address);
-                }
+    let mut rom_address = 0;
+    for instruction in instructions.iter() {
+        match instruction.instruction_type() {
+            InstructionType::Label(label) => {
+                symbol_table.add_entry(&label, rom_address);
             }
-            None => {
-                address += 1;
+            _ => {
+                rom_address += 1;
             }
         }
     }
 
     // 2nd Pass
-    let mut address = 16;
-    for line in lines.iter() {
-        match extract_symbol_from(line) {
-            Some(symbol) => {
+    let mut ram_address = 16;
+    for instruction in instructions.iter() {
+        match instruction.instruction_type() {
+            InstructionType::AddressSymbol(symbol) => {
                 if symbol_table.contains(&symbol) == false {
-                    symbol_table.add_entry(&symbol, address);
-                    address += 1;
+                    symbol_table.add_entry(&symbol, ram_address);
+                    ram_address += 1;
                 }
             }
-            None => {}
+            _ => {}
         }
     }
 
     return symbol_table;
 }
 
-fn extract_symbol_from(line: &str) -> Option<String> {
-    if Some('@') != line.chars().nth(0) {
-        return None;
-    }
-
-    let value_or_symbol = &line[1..];
-    match value_or_symbol.parse::<i16>() {
-        Ok(_) => None,
-        Err(_) => {
-            return Some(value_or_symbol.into());
-        }
-    }
-}
-
-fn build_instruction(
-    line: &str,
-    symbol_table: &symbol_table::SymbolTable,
-) -> Box<dyn Instruction + 'static> {
-    if Some('@') != line.chars().nth(0) {
-        return Box::new(ComputeInstruction::new(line));
-    }
-
-    let value_or_symbol = &line[1..];
-    match value_or_symbol.parse::<i16>() {
-        Ok(value) => return Box::new(AddressingValueInstruction { value: value }),
-        Err(_) => {
-            let value = symbol_table.get_address(&value_or_symbol).unwrap();
-            return Box::new(AddressingValueInstruction { value: value });
-        }
-    };
+enum InstructionType {
+    AddressValue,
+    AddressSymbol(String),
+    Label(String),
+    Compute,
 }
 
 trait Instruction {
-    fn to_bin(&self) -> String;
+    fn to_bin(&self, symbol_table: &symbol_table::SymbolTable) -> Option<String>;
+    fn instruction_type(&self) -> InstructionType;
 }
 
 #[derive(PartialEq, Debug)]
@@ -103,9 +101,90 @@ struct AddressingValueInstruction {
     value: i16,
 }
 
+impl AddressingValueInstruction {
+    fn new(line: &str) -> Option<AddressingValueInstruction> {
+        if Some('@') != line.chars().nth(0) {
+            return None;
+        }
+        let value = &line[1..];
+        match value.parse::<i16>() {
+            Ok(value) => return Some(AddressingValueInstruction { value: value }),
+            Err(_) => return None,
+        };
+    }
+}
+
 impl Instruction for AddressingValueInstruction {
-    fn to_bin(&self) -> String {
-        return format!("{:0>16b}", self.value);
+    fn to_bin(&self, _symbol_table: &symbol_table::SymbolTable) -> Option<String> {
+        return Some(format!("{:0>16b}", self.value));
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        return InstructionType::AddressValue;
+    }
+}
+
+#[derive(PartialEq, Debug)]
+struct AddressingSymbolInstruction {
+    symbol: String,
+}
+
+impl AddressingSymbolInstruction {
+    fn new(line: &str) -> Option<AddressingSymbolInstruction> {
+        if Some('@') != line.chars().nth(0) {
+            return None;
+        }
+        let symbol = &line[1..];
+        return Some(AddressingSymbolInstruction {
+            symbol: symbol.into(),
+        });
+    }
+}
+
+impl Instruction for AddressingSymbolInstruction {
+    fn to_bin(&self, symbol_table: &symbol_table::SymbolTable) -> Option<String> {
+        match symbol_table.get_address(&self.symbol) {
+            Some(value) => {
+                return Some(format!("{:0>16b}", value));
+            }
+            None => {
+                return None;
+            }
+        }
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        return InstructionType::AddressSymbol(self.symbol.clone());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+struct LabelInstruction {
+    label: String,
+}
+
+impl LabelInstruction {
+    fn new(line: &str) -> Option<LabelInstruction> {
+        let re = Regex::new(r"\((?P<label>.*)\)").unwrap();
+        match re.captures(line) {
+            Some(captures) => {
+                let label = captures.name("label").map_or("", |m| m.as_str());
+                return Some(LabelInstruction {
+                    label: label.into(),
+                });
+            }
+            None => None,
+        }
+    }
+}
+
+impl Instruction for LabelInstruction {
+    fn to_bin(&self, _symbol_table: &symbol_table::SymbolTable) -> Option<String> {
+        return None;
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        return InstructionType::Label(self.label.clone());
     }
 }
 
@@ -138,8 +217,12 @@ impl ComputeInstruction {
 }
 
 impl Instruction for ComputeInstruction {
-    fn to_bin(&self) -> String {
-        return code::to_bin(&self.dest, &self.comp, &self.jump);
+    fn to_bin(&self, _symbol_table: &symbol_table::SymbolTable) -> Option<String> {
+        return Some(code::to_bin(&self.dest, &self.comp, &self.jump));
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        return InstructionType::Compute;
     }
 }
 
@@ -194,17 +277,12 @@ mod tests {
     #[test]
     fn test_build_symbol_table() {
         let lines = vec!["@2", "@i", "@sum", "@R1"];
-        let symbol_table = build_symbol_table(&lines);
+        let instructions: Vec<Box<dyn Instruction + 'static>> =
+            lines.iter().map(|line| build_instruction(line)).collect();
+        let symbol_table = build_symbol_table(&instructions);
         assert_eq!(Some(16), symbol_table.get_address("i"));
         assert_eq!(Some(17), symbol_table.get_address("sum"));
         assert_eq!(Some(1), symbol_table.get_address("R1"));
-    }
-
-    #[test]
-    fn test_extract_symbol_from_a_single_line() {
-        assert_eq!(None, extract_symbol_from("@2"));
-        assert_eq!(Some("SP".into()), extract_symbol_from("@SP"));
-        assert_eq!(Some("i".into()), extract_symbol_from("@i"));
     }
 
     #[test]
@@ -212,35 +290,35 @@ mod tests {
         let symbol_table = symbol_table::SymbolTable::new();
         assert_eq!(
             "0000000000000010",
-            build_instruction("@2", &symbol_table).to_bin()
+            build_instruction("@2").to_bin(&symbol_table).unwrap()
         );
         assert_eq!(
             "0000000010000101",
-            build_instruction("@133", &symbol_table).to_bin()
+            build_instruction("@133").to_bin(&symbol_table).unwrap()
         );
         assert_eq!(
             "1110110000010000",
-            build_instruction("D=A", &symbol_table).to_bin()
+            build_instruction("D=A").to_bin(&symbol_table).unwrap()
         );
         assert_eq!(
             "1110000010010000",
-            build_instruction("D=D+A", &symbol_table).to_bin()
+            build_instruction("D=D+A").to_bin(&symbol_table).unwrap()
         );
         assert_eq!(
             "1110001100001000",
-            build_instruction("M=D", &symbol_table).to_bin()
+            build_instruction("M=D").to_bin(&symbol_table).unwrap()
         );
         assert_eq!(
             "1110001100000001",
-            build_instruction("D;JGT", &symbol_table).to_bin()
+            build_instruction("D;JGT").to_bin(&symbol_table).unwrap()
         );
         assert_eq!(
             "0000000000000000",
-            build_instruction("@SP", &symbol_table).to_bin()
+            build_instruction("@SP").to_bin(&symbol_table).unwrap()
         );
         assert_eq!(
             "0000000000001111",
-            build_instruction("@R15", &symbol_table).to_bin()
+            build_instruction("@R15").to_bin(&symbol_table).unwrap()
         );
     }
 
